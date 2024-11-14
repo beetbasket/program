@@ -1,0 +1,4 @@
+github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/trymoose/debug v0.0.2 h1:x3j63krXVG9dUmyP00hj1EoN787KpPWShDKOfInh8TE=
+github.com/trymoose/debug v0.0.2/go.mod h1:p6AOlIwtaghar0zw+ymEjt8VaRijUWKDt5Uq0TmMQoo=
