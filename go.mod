@@ -1,4 +1,4 @@
-module program
+module github.com/beetbasket/program
 
 go 1.23.2
 
