@@ -16,11 +16,7 @@ type Subcommand struct {
 	Main   any
 }
 
-var subcommands = map[string]*Subcommand{
-	"": {
-		Main: func() {},
-	},
-}
+var subcommands = map[string]*Subcommand{}
 
 func Register(sc *Subcommand) {
 	subcommands[sc.Name] = sc
@@ -46,17 +42,34 @@ func runSubCommand(ctx context.Context) {
 }
 
 type OsArgs []string
+type Context struct{ context.Context }
 
 func execSubCommand(subcommand string, ctx context.Context, args []string) {
 	sc, ok := subcommands[subcommand]
 	if ok {
-		fx.New(
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		pr := fx.New(
 			append(
 				sc.Module,
 				fx.Supply(OsArgs(args)),
+				fx.Provide(fx.Annotate(
+					fx.Supply(&Context{ctx}),
+					fx.As(new(context.Context)),
+				)),
 				fx.Invoke(sc.Main),
 			)...,
-		).Run()
+		)
+
+		go func() {
+			defer cancel()
+			select {
+			case <-pr.Done():
+			case <-pr.Wait():
+			}
+		}()
+
+		pr.Run()
 	} else if subcommand != "" {
 		execSubCommand("", ctx, append([]string{subcommand}, args...))
 	} else {
