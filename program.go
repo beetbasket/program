@@ -2,22 +2,28 @@ package program
 
 import (
 	"context"
-	"github.com/google/uuid"
 	"github.com/trymoose/debug"
+	"go.uber.org/fx"
 	"log/slog"
 	"os"
 )
 
-type SubcommandFn func(ctx context.Context, args []string) error
+import _ "github.com/beetbasket/program/pkg/log"
 
-var DefaultSubcommand = uuid.NewString()
-
-var subcommands = map[string]SubcommandFn{
-	DefaultSubcommand: func(ctx context.Context, args []string) error { return nil },
+type Subcommand struct {
+	Name   string
+	Module []fx.Option
+	Main   any
 }
 
-func Subcommand(name string, command SubcommandFn) {
-	subcommands[name] = command
+var subcommands = map[string]*Subcommand{
+	"": {
+		Main: func() {},
+	},
+}
+
+func Register(sc *Subcommand) {
+	subcommands[sc.Name] = sc
 }
 
 func Main() {
@@ -28,22 +34,32 @@ func Main() {
 		slog.Debug("running in debug mode")
 	}
 
-	if err := runSubCommand(ctx); err != nil {
-		slog.Error("exited with error", slog.Any("error", err))
-	}
+	runSubCommand(ctx)
 }
 
-func runSubCommand(ctx context.Context) error {
+func runSubCommand(ctx context.Context) {
 	if len(os.Args) > 1 {
-		return execSubCommand(os.Args[1], ctx, os.Args[2:])
+		execSubCommand(os.Args[1], ctx, os.Args[2:])
+	} else {
+		execSubCommand("", ctx, os.Args[1:])
 	}
-	return execSubCommand(DefaultSubcommand, ctx, os.Args[1:])
 }
 
-func execSubCommand(subcommand string, ctx context.Context, args []string) error {
-	fn, ok := subcommands[subcommand]
+type OsArgs []string
+
+func execSubCommand(subcommand string, ctx context.Context, args []string) {
+	sc, ok := subcommands[subcommand]
 	if ok {
-		return fn(ctx, args)
+		fx.New(
+			append(
+				sc.Module,
+				fx.Supply(OsArgs(args)),
+				fx.Invoke(sc.Main),
+			)...,
+		).Run()
+	} else if subcommand != "" {
+		execSubCommand("", ctx, append([]string{subcommand}, args...))
+	} else {
+		panic("no main command set")
 	}
-	return execSubCommand(DefaultSubcommand, ctx, append([]string{subcommand}, args...))
 }
