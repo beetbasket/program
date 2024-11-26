@@ -44,6 +44,8 @@ func runSubCommand(ctx context.Context) {
 type OsArgs []string
 type Context struct{ context.Context }
 
+var _ context.Context = Context{}
+
 func execSubCommand(subcommand string, ctx context.Context, args []string) {
 	sc, ok := subcommands[subcommand]
 	if ok {
@@ -53,10 +55,12 @@ func execSubCommand(subcommand string, ctx context.Context, args []string) {
 			append(
 				sc.Module,
 				fx.Supply(OsArgs(args)),
-				fx.Provide(fx.Annotate(
-					fx.Supply(&Context{ctx}),
-					fx.As(new(context.Context)),
-				)),
+				fx.Supply(
+					fx.Annotate(
+						Context{ctx},
+						fx.As(new(context.Context)),
+					),
+				),
 				fx.Invoke(sc.Main),
 			)...,
 		)
