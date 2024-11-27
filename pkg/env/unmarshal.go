@@ -18,9 +18,8 @@ const (
 )
 
 var (
-	ErrNotPointer       = errors.New("not a pointer to a value")
 	ErrInvalid          = errors.New("nil value")
-	ErrNotStructPointer = errors.New("not a pointer to a struct")
+	ErrNotStructPointer = errors.New("not a struct")
 )
 
 type TagOp string
@@ -72,10 +71,10 @@ func (err *ErrMismatchedParseTypes) Error() string {
 	return fmt.Sprintf("cannot set struct field of type %q to type %q returned from parser", err.Struct.Name(), err.Parser.Name())
 }
 
-func Unmarshal(v any) error {
-	rv, err := getStruct(v)
+func Unmarshal[T any]() (v T, _ error) {
+	rv, err := getStruct[T]()
 	if err != nil {
-		return err
+		return v, err
 	}
 
 	var helper help.Help
@@ -83,7 +82,7 @@ func Unmarshal(v any) error {
 	for st, sv := range iterStructValidFields(rv, TagEnv) {
 		psr, err := readTag(st, sv, &helper)
 		if err != nil {
-			return err
+			return v, err
 		}
 		fieldParsers = append(fieldParsers, psr)
 	}
@@ -92,10 +91,10 @@ func Unmarshal(v any) error {
 
 	for _, parse := range fieldParsers {
 		if err := parse(); err != nil {
-			return err
+			return v, err
 		}
 	}
-	return nil
+	return rv.Interface().(T), nil
 }
 
 func readTag(st reflect.StructField, sv reflect.Value, helper *help.Help) (func() error, error) {
@@ -112,10 +111,13 @@ func readTag(st reflect.StructField, sv reflect.Value, helper *help.Help) (func(
 		value, err := tags.Parse(helper)
 		if err != nil {
 			return &ErrOpFail[TagOpParse]{
+				Op: TagOpParse{
+					Name: tags.key,
+				},
 				Field: st,
 				Err:   err,
 			}
-		} else if value.Type() != sv.Type() {
+		} else if value.Type() != sv.Type() && !value.Type().Implements(sv.Type()) {
 			return &ErrMismatchedParseTypes{
 				Parser: value.Type(),
 				Struct: sv.Type(),
@@ -139,23 +141,13 @@ func setEnvHelp(rv reflect.Value, helper *help.Help) {
 	}
 }
 
-func getStruct(v any) (reflect.Value, error) {
-	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Interface {
-		rv = rv.Elem()
-	}
-
-	if rv.Kind() != reflect.Pointer {
-		return reflect.Value{}, ErrNotPointer
-	}
-
-	rv = rv.Elem()
+func getStruct[T any]() (reflect.Value, error) {
+	rv := reflect.New(reflect.TypeFor[T]()).Elem()
 	if !rv.IsValid() {
 		return reflect.Value{}, ErrInvalid
 	} else if rv.Kind() != reflect.Struct {
 		return reflect.Value{}, ErrNotStructPointer
 	}
-
 	return rv, nil
 }
 

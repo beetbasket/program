@@ -12,6 +12,7 @@ func init() {
 	RegisterParser[parsers.AbsFile]()
 	RegisterParser[parsers.Args]()
 	RegisterParser[parsers.Port]()
+	RegisterParser[parsers.IPv4Parser]()
 }
 
 type Parser[T any] interface {

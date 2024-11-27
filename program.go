@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/trymoose/debug"
 	"go.uber.org/fx"
+	"go.uber.org/fx/fxevent"
 	"log/slog"
 	"os"
 )
@@ -49,34 +50,45 @@ var _ context.Context = Context{}
 func execSubCommand(subcommand string, ctx context.Context, args []string) {
 	sc, ok := subcommands[subcommand]
 	if ok {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		pr := fx.New(
-			append(
-				sc.Module,
-				fx.Supply(OsArgs(args)),
-				fx.Supply(
-					fx.Annotate(
-						Context{ctx},
-						fx.As(new(context.Context)),
-					),
+		var opts []fx.Option
+		if sc.Main != nil {
+			opts = append(opts, fx.Invoke(sc.Main))
+		}
+
+		fx.New(
+			fx.Options(sc.Module...),
+			fx.Provide(
+				slog.Default,
+				osArgs(args),
+				fx.Annotate(
+					provideContext,
+					fx.As(new(context.Context)),
 				),
-				fx.Invoke(sc.Main),
-			)...,
-		)
-
-		go func() {
-			defer cancel()
-			select {
-			case <-pr.Done():
-			case <-pr.Wait():
-			}
-		}()
-
-		pr.Run()
+			),
+			fx.WithLogger(withSlogger),
+			fx.Options(opts...),
+		).Run()
 	} else if subcommand != "" {
 		execSubCommand("", ctx, append([]string{subcommand}, args...))
 	} else {
 		panic("no main command set")
 	}
+}
+
+func osArgs(args []string) func() OsArgs {
+	return func() OsArgs {
+		return args
+	}
+}
+
+func withSlogger(slogger *slog.Logger) fxevent.Logger {
+	return &fxevent.SlogLogger{
+		Logger: slogger,
+	}
+}
+
+func provideContext(lf fx.Lifecycle) context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	lf.Append(fx.StopHook(cancel))
+	return ctx
 }
